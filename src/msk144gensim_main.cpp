@@ -4,12 +4,8 @@
 // License: MIT
 //
 
-
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-#include <sched.h>
 #include <unistd.h>
 #include <getopt.h>
 
@@ -26,6 +22,9 @@
 #include <thread>
 #include <sstream>
 #include <cmath>
+
+#include <chrono>
+#include <thread>
 
 
 extern "C" {
@@ -48,6 +47,8 @@ struct Context
     char message[80] = {"HELLO"};
     int on_frames = 10;
     int off_frames = 20;
+    bool use_throttle = false;
+    int sample_rate = 12000;
     int i4tone[144];
 };
 
@@ -76,6 +77,7 @@ static void out_wav_16bit(const Context& ctx)
     const float dphi1 = two_pi * (ctx.center_freq + 0.25f * baud) / sps;
     float phi = 0.0f;
     const float max_amp = 1000.0f;
+    const int64_t frame_length_in_milliseconds = 144LL * 1000 / static_cast<int64_t>(baud);
 
     while(true)
     {
@@ -110,6 +112,11 @@ static void out_wav_16bit(const Context& ctx)
                     }
                 }
             }
+
+            if(ctx.use_throttle)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
+            }
         }
 
         // send silence
@@ -124,6 +131,11 @@ static void out_wav_16bit(const Context& ctx)
                     // std::cout << "off" << std::endl;
                 }
             }
+
+            if(ctx.use_throttle)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
+            }
             
         }
     }
@@ -134,22 +146,25 @@ static void out_wav_16bit(const Context& ctx)
 static void out_iq_8bit(const Context& ctx)
 {
     const int symbols_per_second = 2000;
-    const int sdr_sample_rate = 2048000;
+    const int sdr_sample_rate = ctx.sample_rate; // was 2048000
     const int samples_per_symbol = sdr_sample_rate / symbols_per_second;
     const int pp_len = samples_per_symbol * 2;
 
-    // std::cout << "pp_len = " << pp_len << std::endl;
-    // std::cout << "144 iq len = " << pp_len * 144  << std::endl;
-    // std::cout << "144*32 iq len = " << pp_len * 144 * 32 << std::endl;
+    const int64_t frame_length_in_milliseconds = 144LL * 1000 / static_cast<int64_t>(symbols_per_second);
 
     // pp_len = 2048
     // 144 iq len = 294912
-    // 144*32 iq len = 9437184
 
 
-    if (pp_len % 2 != 0)
+    if (pp_len < 12 || pp_len % 2 != 0)
     {
-        throw std::runtime_error("wrong pp_len");
+        std::ostringstream info;
+        info << "pp_len must be more than 12 and must be even." << std::endl
+            << "sdr_sample_rate = " << sdr_sample_rate << std::endl
+            << "pp_len = " << pp_len << std::endl
+            << "pp_len * 144 = " << pp_len * 144  << std::endl;
+
+        throw std::runtime_error(info.str());
     }
 
     const int N72 = 144 / 2;
@@ -210,6 +225,11 @@ static void out_iq_8bit(const Context& ctx)
                 char q_ch = static_cast<char>(q_res[i] * scale);
                 std::cout << i_ch << q_ch;
             }
+
+            if(ctx.use_throttle)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
+            }
         }
 
         // send silence
@@ -220,6 +240,11 @@ static void out_iq_8bit(const Context& ctx)
                 char i_ch = 0;
                 char q_ch = 0;
                 std::cout << i_ch << q_ch;
+            }
+
+            if(ctx.use_throttle)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
             }
         }
 
@@ -232,14 +257,16 @@ static void out_iq_8bit(const Context& ctx)
 static void usage(void)
 {
     std::ostringstream buf;
-    buf << "\nsk144gensim - msk144 generator. Produces infinite stdout audio stream - 16 bits signed, 12000 samples per second, mono.\n\n";
+    buf << "\nmsk144gensim - msk144 generator. Produces infinite stdout audio stream - 16 bits signed, 12000 samples per second, mono.\n\n";
     buf << "Usage:\t[--message= Message to send ]\n";
     buf << "\t[--center-freq= Center frequency (default: 1500)]\n";
     buf << "\t[--snr= snr in db (default: 10.0)]\n";
     buf << "\t[--on-frames= ON frmaes (default: 10)]\n";
     buf << "\t[--off-frames= ON frames (default: 20)]\n";
     buf << "\t[--mode= 1-wav output; 2-IQ output (default: 1)]\n";
-    buf << "\t[--show-only= Print only text and bits to be send. (default: false)]\n";
+    buf << "\t[--sample-rate= sample rate for output stream (default: 12000)]\n";
+    buf << "\t[--use-throttle= emulate real time output using sleep (default: false)]\n";
+    buf << "\t[--show-only Print only text and bits to be send. (default: false)]\n";
     buf << "\t[--help this text]\n";
 
     std::cout << buf.str() << std::endl;
@@ -259,8 +286,10 @@ int main(int argc, char** argv)
             {"snr", required_argument, 0, 0}, // 3
             {"on-frames", required_argument, 0, 0}, // 4
             {"off-frames", required_argument, 0, 0}, // 5
-            {"show-only", required_argument, 0, 0}, // 6
+            {"show-only", no_argument, 0, 0}, // 6
             {"mode", required_argument, 0, 0}, // 7
+            {"use-throttle", required_argument, 0, 0}, // 8
+            {"sample-rate", required_argument, 0, 0}, // 9
             {0, 0, 0, 0}
     };
 
@@ -301,11 +330,18 @@ int main(int argc, char** argv)
                 ctx.off_frames = atoi(optarg);
                 break;
             case 6:
-                show_only = str2bool(optarg);
+                show_only = true; //str2bool(optarg);
                 break;
             case 7:
                 mode = atoi(optarg);
                 break;
+            case 8:
+                ctx.use_throttle = str2bool(optarg);
+                break;
+            case 9:
+                ctx.sample_rate = atoi(optarg);
+                break;
+
             default:
                 usage();
             }
@@ -337,6 +373,8 @@ int main(int argc, char** argv)
         std::cout << "itype:" << itype << std::endl;
         std::cout << "sig:" << sig << std::endl;
         std::cout << "mode:" << mode << std::endl;
+        std::cout << "use_throttle:" << ctx.use_throttle << std::endl;
+        std::cout << "sample_rate:" << ctx.sample_rate << std::endl;
         return 0;
 
     }
