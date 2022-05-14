@@ -25,7 +25,7 @@
 
 #include <chrono>
 #include <thread>
-
+#include <random>
 
 extern "C" {
   // --- Fortran routines ---
@@ -43,13 +43,38 @@ extern "C" {
 struct Context
 {
     float center_freq = 1500.0f;
-    float snrdb = 10.0f;
+    int signal_level = 100;
+    int noise_level = 5;
     char message[80] = {"HELLO"};
     int on_frames = 10;
     int off_frames = 20;
     bool use_throttle = false;
     int sample_rate = 12000;
     int i4tone[144];
+};
+
+
+class SimpleRNG
+{
+public:
+    SimpleRNG(): 
+        _dev(),
+        _rng(_dev()),
+        _dist(-999, 999)
+    {
+    }
+
+    float get_random() 
+    {
+        int v = _dist(_rng);
+        return v / 1000.0f;
+    }
+
+private:
+    std::random_device _dev;
+    std::mt19937 _rng;
+    std::uniform_int_distribution<std::mt19937::result_type> _dist;
+
 };
 
 
@@ -76,8 +101,9 @@ static void out_wav_16bit(const Context& ctx)
     const float dphi0 = two_pi * (ctx.center_freq - 0.25f * baud) / sps;
     const float dphi1 = two_pi * (ctx.center_freq + 0.25f * baud) / sps;
     float phi = 0.0f;
-    const float max_amp = 1000.0f;
     const int64_t frame_length_in_milliseconds = 144LL * 1000 / static_cast<int64_t>(baud);
+
+    SimpleRNG rng;
 
     while(true)
     {
@@ -95,7 +121,9 @@ static void out_wav_16bit(const Context& ctx)
 
                 for(int k=0; k<nsps; k++)
                 {
-                    int v = std::cos(phi) * max_amp;
+                    float v_signal = std::cos(phi) * ctx.signal_level;
+                    float v_noise = rng.get_random() * ctx.noise_level;
+                    int v = static_cast<int>(v_signal + v_noise);
                     char low = v & 0xff;
                     char high = v >> 8;
                     std::cout << low << high;
@@ -126,9 +154,13 @@ static void out_wav_16bit(const Context& ctx)
             {
                 for(int k=0; k<nsps; k++)
                 {
-                    unsigned char ch = 0;
-                    std::cout << ch << ch;
-                    // std::cout << "off" << std::endl;
+                    float v_signal = 0.0f;
+                    float v_noise = rng.get_random() * ctx.noise_level;
+                    int v = static_cast<int>(v_signal + v_noise);
+
+                    char low = v & 0xff;
+                    char high = v >> 8;
+                    std::cout << low << high;
                 }
             }
 
@@ -155,6 +187,7 @@ static void out_iq_8bit(const Context& ctx)
     // pp_len = 2048
     // 144 iq len = 294912
 
+    SimpleRNG rng;
 
     if (pp_len < 12 || pp_len % 2 != 0)
     {
@@ -214,15 +247,21 @@ static void out_iq_8bit(const Context& ctx)
         }
     }
 
-    const float scale = 100.0;
     while(true)
     {
         for(int i=0; i<ctx.on_frames; i++)
         {
             for (int i = 0; i < N72 * pp_len; i++)
             {
-                char i_ch = static_cast<char>(i_res[i] * scale);
-                char q_ch = static_cast<char>(q_res[i] * scale);
+                float i_noise = rng.get_random() * ctx.noise_level;
+                float q_noise = rng.get_random() * ctx.noise_level;
+
+                float i_signal = i_res[i] * ctx.signal_level;
+                float q_signal = q_res[i] * ctx.signal_level;
+
+                char i_ch = static_cast<char>(i_noise + i_signal);
+                char q_ch = static_cast<char>(q_noise + q_signal);
+
                 std::cout << i_ch << q_ch;
             }
 
@@ -237,8 +276,12 @@ static void out_iq_8bit(const Context& ctx)
         {
             for (int i = 0; i < N72 * pp_len; i++)
             {
-                char i_ch = 0;
-                char q_ch = 0;
+                float i_noise = rng.get_random() * ctx.noise_level;
+                float q_noise = rng.get_random() * ctx.noise_level;
+
+                char i_ch = static_cast<char>(i_noise);
+                char q_ch = static_cast<char>(q_noise);
+
                 std::cout << i_ch << q_ch;
             }
 
@@ -260,7 +303,8 @@ static void usage(void)
     buf << "\nmsk144gensim - msk144 generator. Produces infinite stdout audio stream - 16 bits signed, 12000 samples per second, mono.\n\n";
     buf << "Usage:\t[--message= Message to send ]\n";
     buf << "\t[--center-freq= Center frequency (default: 1500)]\n";
-    buf << "\t[--snr= snr in db (default: 10.0)]\n";
+    buf << "\t[--signal-level= max signal level (default: 100)]\n";
+    buf << "\t[--noise-level= max signal level (default: 5)]\n";
     buf << "\t[--on-frames= ON frmaes (default: 10)]\n";
     buf << "\t[--off-frames= ON frames (default: 20)]\n";
     buf << "\t[--mode= 1-wav output; 2-IQ output (default: 1)]\n";
@@ -283,13 +327,14 @@ int main(int argc, char** argv)
             {"help", no_argument, 0, 0}, // 0
             {"message", required_argument, 0, 0}, // 1
             {"center-freq", required_argument, 0, 0}, // 2
-            {"snr", required_argument, 0, 0}, // 3
+            {"signal-level", required_argument, 0, 0}, // 3
             {"on-frames", required_argument, 0, 0}, // 4
             {"off-frames", required_argument, 0, 0}, // 5
             {"show-only", no_argument, 0, 0}, // 6
             {"mode", required_argument, 0, 0}, // 7
             {"use-throttle", required_argument, 0, 0}, // 8
             {"sample-rate", required_argument, 0, 0}, // 9
+            {"noise-level", required_argument, 0, 0}, // 10
             {0, 0, 0, 0}
     };
 
@@ -321,7 +366,7 @@ int main(int argc, char** argv)
                 ctx.center_freq = atof(optarg);
                 break;
             case 3:
-                ctx.snrdb = atof(optarg);
+                ctx.signal_level = atoi(optarg);
                 break;
             case 4:
                 ctx.on_frames = atoi(optarg);
@@ -341,15 +386,15 @@ int main(int argc, char** argv)
             case 9:
                 ctx.sample_rate = atoi(optarg);
                 break;
+            case 10:
+                ctx.noise_level = atoi(optarg);
+                break;
 
             default:
                 usage();
             }
         }
     }
-
-
-    float sig = std::sqrt(2.0f) * std::pow(10.0f, 0.05f * ctx.snrdb);
 
     char msgsent[200];
     memset(msgsent, 0, sizeof(msgsent));
@@ -371,7 +416,8 @@ int main(int argc, char** argv)
         std::cout << std::endl;
 
         std::cout << "itype:" << itype << std::endl;
-        std::cout << "sig:" << sig << std::endl;
+        std::cout << "signal_level:" << ctx.signal_level << std::endl;
+        std::cout << "noise_level:" << ctx.noise_level << std::endl;
         std::cout << "mode:" << mode << std::endl;
         std::cout << "use_throttle:" << ctx.use_throttle << std::endl;
         std::cout << "sample_rate:" << ctx.sample_rate << std::endl;
