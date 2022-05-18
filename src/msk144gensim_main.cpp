@@ -45,12 +45,13 @@ struct Context
     float center_freq = 1500.0f;
     int signal_level = 100;
     int noise_level = 5;
-    char message[80] = {"HELLO"};
+    char message[3][80] = {"HELLO", "HELLO2", "HELLO3"};
     int on_frames = 10;
     int off_frames = 20;
     bool use_throttle = false;
     int sample_rate = 12000;
-    int i4tone[144];
+    int num_messages = 1;
+    int i4tone[3][144];
 };
 
 
@@ -107,43 +108,47 @@ static void out_wav_16bit(const Context& ctx)
 
     while(true)
     {
-        for(int i=0; i<ctx.on_frames; i++)
+        for(int msg_idx=0; msg_idx<ctx.num_messages; msg_idx++)
         {
-            for(int j=0; j<144; j++)
+            for(int i=0; i<ctx.on_frames; i++)
             {
-                const int ch = ctx.i4tone[j];
-                if(ch!=0 && ch!=1)
+                const int* tones = ctx.i4tone[msg_idx];
+                for(int j=0; j<144; j++)
                 {
-                    throw std::runtime_error("wrong ch");
-                }
-
-                const float dphi = (ch == 0)? dphi0 : dphi1;
-
-                for(int k=0; k<nsps; k++)
-                {
-                    float v_signal = std::cos(phi) * ctx.signal_level;
-                    float v_noise = rng.get_random() * ctx.noise_level;
-                    int v = static_cast<int>(v_signal + v_noise);
-                    char low = v & 0xff;
-                    char high = v >> 8;
-                    std::cout << low << high;
-                    // std::cout << "j:" << j 
-                    //     << " ch:" << ch 
-                    //     << " k:" << k 
-                    //     << " v:" << v 
-                    //     <<  std::endl;
-
-                    phi += dphi;
-                    if(phi > two_pi)
+                    const int ch = tones[j];
+                    if(ch!=0 && ch!=1)
                     {
-                        phi -= two_pi;
+                        throw std::runtime_error("wrong ch");
+                    }
+
+                    const float dphi = (ch == 0)? dphi0 : dphi1;
+
+                    for(int k=0; k<nsps; k++)
+                    {
+                        float v_signal = std::cos(phi) * ctx.signal_level;
+                        float v_noise = rng.get_random() * ctx.noise_level;
+                        int v = static_cast<int>(v_signal + v_noise);
+                        char low = v & 0xff;
+                        char high = v >> 8;
+                        std::cout << low << high;
+                        // std::cout << "j:" << j 
+                        //     << " ch:" << ch 
+                        //     << " k:" << k 
+                        //     << " v:" << v 
+                        //     <<  std::endl;
+
+                        phi += dphi;
+                        if(phi > two_pi)
+                        {
+                            phi -= two_pi;
+                        }
                     }
                 }
-            }
 
-            if(ctx.use_throttle)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
+                if(ctx.use_throttle)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
+                }
             }
         }
 
@@ -206,6 +211,8 @@ static void out_iq_8bit(const Context& ctx)
     std::vector<float> q_res(N72 * pp_len);
     std::vector<float> i_res(N72 * pp_len);
 
+    const int* tones = ctx.i4tone[0];
+
     const float pi = 4 * std::atan(1.0f);
     for (int i = 0; i < pp_len; i++)
     {
@@ -215,7 +222,7 @@ static void out_iq_8bit(const Context& ctx)
     // Q (half first)
     for (int j = 0; j < pp_len / 2; j++)
     {
-        q_res[j] = ctx.i4tone[0] * pp[pp_len / 2 + j];
+        q_res[j] = tones[0] * pp[pp_len / 2 + j];
     }
 
     // Q
@@ -224,7 +231,7 @@ static void out_iq_8bit(const Context& ctx)
         int base =  pp_len * i - pp_len / 2;
         for (int j = 0; j < pp_len; j++)
         {
-            q_res[base + j] = ctx.i4tone[2 * i] * pp[j];
+            q_res[base + j] = tones[2 * i] * pp[j];
         }
     }
 
@@ -233,7 +240,7 @@ static void out_iq_8bit(const Context& ctx)
         int base = pp_len * N72 - pp_len / 2;
         for (int j = 0; j < pp_len / 2; j++)
         {
-            q_res[base + j] = ctx.i4tone[0] * pp[j];
+            q_res[base + j] = tones[0] * pp[j];
         }
     }
 
@@ -243,7 +250,7 @@ static void out_iq_8bit(const Context& ctx)
         int base = pp_len * i;
         for (int j = 0; j < pp_len; j++)
         {
-            i_res[base + j] = ctx.i4tone[2 * i + 1] * pp[j];
+            i_res[base + j] = tones[2 * i + 1] * pp[j];
         }
     }
 
@@ -302,6 +309,8 @@ static void usage(void)
     std::ostringstream buf;
     buf << "\nmsk144gensim - msk144 generator. Produces infinite stdout audio stream - 16 bits signed, 12000 samples per second, mono.\n\n";
     buf << "Usage:\t[--message= Message to send ]\n";
+    buf << "\t[--message2= 2nd message to send]\n";
+    buf << "\t[--message3= 3rd message to send]\n";
     buf << "\t[--center-freq= Center frequency (default: 1500)]\n";
     buf << "\t[--signal-level= max signal level (default: 100)]\n";
     buf << "\t[--noise-level= max signal level (default: 5)]\n";
@@ -335,6 +344,9 @@ int main(int argc, char** argv)
             {"use-throttle", required_argument, 0, 0}, // 8
             {"sample-rate", required_argument, 0, 0}, // 9
             {"noise-level", required_argument, 0, 0}, // 10
+            {"num-messages", required_argument, 0, 0}, // 11
+            {"message2", required_argument, 0, 0}, // 12
+            {"message3", required_argument, 0, 0}, // 13
             {0, 0, 0, 0}
     };
 
@@ -360,7 +372,7 @@ int main(int argc, char** argv)
                 usage();
                 break;
             case 1:
-                strcpy(ctx.message, optarg);
+                strcpy(ctx.message[0], optarg);
                 break;
             case 2:
                 ctx.center_freq = atof(optarg);
@@ -389,6 +401,16 @@ int main(int argc, char** argv)
             case 10:
                 ctx.noise_level = atoi(optarg);
                 break;
+            case 11:
+                ctx.num_messages = atoi(optarg);
+                if(ctx.num_messages > 3) { ctx.num_messages = 3; }
+                break;
+            case 12:
+                strcpy(ctx.message[1], optarg);
+                break;
+            case 13:
+                strcpy(ctx.message[2], optarg);
+                break;
 
             default:
                 usage();
@@ -399,23 +421,30 @@ int main(int argc, char** argv)
     char msgsent[200];
     memset(msgsent, 0, sizeof(msgsent));
 
-    int ichk = 0;
-    int itype = 1;
-    genmsk_128_90_(ctx.message, &ichk, msgsent, ctx.i4tone, &itype, 37, 37);
+    for(int idx=0; idx<ctx.num_messages; idx++)
+    {
+        int ichk = 0;
+        int itype = 1;
+        genmsk_128_90_(ctx.message[idx], &ichk, msgsent, ctx.i4tone[idx], &itype, 37, 37);
+    }
 
     if(show_only)
     {
-        std::cout << "msg sent: '" << msgsent << "'" << std::endl;
-        std::cout << "i4tone[40] = " << ctx.i4tone[40] << std::endl;
-        std::cout << "i4tone:" << std::endl;
-        for(int i=0; i<144; i++)
+        for(int idx=0; idx<ctx.num_messages; idx++)
         {
-            std::cout << ctx.i4tone[i];
+            std::cout << "msg id = " << idx << std::endl;
+            std::cout << "msg sent: '" << msgsent << "'" << std::endl;
+            std::cout << "i4tone[40] = " << ctx.i4tone[40] << std::endl;
+            std::cout << "i4tone:" << std::endl;
+            for(int i=0; i<144; i++)
+            {
+                std::cout << ctx.i4tone[i];
+            }
+            std::cout << std::endl;
+            std::cout << std::endl;
         }
-        std::cout << std::endl;
-        std::cout << std::endl;
 
-        std::cout << "itype:" << itype << std::endl;
+        //std::cout << "itype:" << itype << std::endl;
         std::cout << "signal_level:" << ctx.signal_level << std::endl;
         std::cout << "noise_level:" << ctx.noise_level << std::endl;
         std::cout << "mode:" << mode << std::endl;
