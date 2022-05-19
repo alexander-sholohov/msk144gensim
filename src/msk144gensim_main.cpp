@@ -210,14 +210,21 @@ static void out_iq_8bit(const Context& ctx)
     std::vector<float> pp(pp_len);
     std::vector<float> q_res(N72 * pp_len);
     std::vector<float> i_res(N72 * pp_len);
+    std::vector<float> tones(144);
 
-    const int* tones = ctx.i4tone[0];
+    for(int i=0; i<144; i++)
+    {
+        int v = ctx.i4tone[0][i];
+        v = v * 2 - 1;
+        tones[i] = static_cast<float>(v);
+    }
 
     const float pi = 4 * std::atan(1.0f);
     for (int i = 0; i < pp_len; i++)
     {
         pp[i] = std::sin(pi * i / pp_len);
     }
+
 
     // Q (half first)
     for (int j = 0; j < pp_len / 2; j++)
@@ -270,6 +277,7 @@ static void out_iq_8bit(const Context& ctx)
                 char q_ch = static_cast<char>(q_noise + q_signal);
 
                 std::cout << i_ch << q_ch;
+                //std::cout << q_ch << i_ch;
             }
 
             if(ctx.use_throttle)
@@ -434,11 +442,11 @@ int main(int argc, char** argv)
         {
             std::cout << "msg id = " << idx << std::endl;
             std::cout << "msg sent: '" << msgsent << "'" << std::endl;
-            std::cout << "i4tone[40] = " << ctx.i4tone[40] << std::endl;
+            std::cout << "i4tone[40] = " << ctx.i4tone[idx][40] << std::endl;
             std::cout << "i4tone:" << std::endl;
             for(int i=0; i<144; i++)
             {
-                std::cout << ctx.i4tone[i];
+                std::cout << ctx.i4tone[idx][i];
             }
             std::cout << std::endl;
             std::cout << std::endl;
