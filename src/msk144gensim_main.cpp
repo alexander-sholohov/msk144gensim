@@ -52,6 +52,7 @@ struct Context
     int sample_rate = 12000;
     int num_messages = 1;
     int i4tone[3][144];
+    int bitseq[3][144];
 };
 
 
@@ -311,6 +312,37 @@ static void out_iq_8bit(const Context& ctx)
 
 }
 
+static void tone2bitseq(const int* tone, int* outbitsec)
+{
+    int tmp[144];
+
+    // flip polarity
+    for(int i=0; i<144; i++)
+    {
+        tmp[i] = (tone[i] == 0)? 1: 0;
+    }
+
+    for(int i=0; i<144; i+=2)
+    {
+        tmp[i+0] = (tmp[i+0] == 0)? -1: 1;
+        tmp[i+1] = (tmp[i+1] == 0)? +1: -1;
+    }
+
+    int tmp2[144];
+
+    tmp2[0] = -1; // because of sync 01110010
+    for(int i=1; i<144; i++)
+    {
+        tmp2[i] = tmp[i-1] * tmp2[i-1];
+    }
+
+    for(int i=0; i<144; i++)
+    {
+        outbitsec[i] = (tmp2[i] == -1)? 0 : 1;
+    }
+
+}
+
 //-------------------------------------------------------------------
 static void usage(void)
 {
@@ -434,6 +466,8 @@ int main(int argc, char** argv)
         int ichk = 0;
         int itype = 1;
         genmsk_128_90_(ctx.message[idx], &ichk, msgsent, ctx.i4tone[idx], &itype, 37, 37);
+
+        tone2bitseq(ctx.i4tone[idx], ctx.bitseq[idx]);
     }
 
     if(show_only)
@@ -449,6 +483,12 @@ int main(int argc, char** argv)
                 std::cout << ctx.i4tone[idx][i];
             }
             std::cout << std::endl;
+            std::cout << "bitseq:" << std::endl;
+            for(int i=0; i<144; i++)
+            {
+                std::cout << ctx.bitseq[idx][i];
+            }
+
             std::cout << std::endl;
         }
 
