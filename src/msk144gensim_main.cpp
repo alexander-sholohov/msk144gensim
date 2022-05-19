@@ -213,28 +213,33 @@ static void out_iq_8bit(const Context& ctx)
         throw std::runtime_error(info.str());
     }
 
-    
-
     std::vector<float> pp(pp_len);
+    const float pi = 4 * std::atan(1.0f);
+    for (int i = 0; i < pp_len; i++)
+    {
+        pp[i] = std::sin(pi * i / pp_len);
+    }
+
 
     constexpr int N72 = 144 / 2;
 
     struct Item
     {
-        std::vector<float> tones {144};
-        std::vector<float> q_res {72};
-        std::vector<float> i_res {72};
+        Item(int pp_len): tones(144), q_res(72*pp_len), i_res(72*pp_len) {}
+
+        std::vector<float> tones;
+        std::vector<float> q_res;
+        std::vector<float> i_res;
     };
 
     std::vector<Item> items;
 
     for(int idx=0; idx<ctx.num_messages; idx++)
     {
-        Item item;
+        Item item(pp_len);
         for(int i=0; i<144; i++)
         {
-            const int v = (ctx.messages[idx].bitseq[i] == 0)? -1 : 1;
-            item.tones[i] = static_cast<float>(v);
+            item.tones[i] = (ctx.messages[idx].bitseq[i] == 0)? -1.0f : 1.0f;
         }
         items.push_back(item);
     }
@@ -244,13 +249,6 @@ static void out_iq_8bit(const Context& ctx)
         auto const& tones = items[idx].tones;
         auto& q_res = items[idx].q_res;
         auto& i_res = items[idx].i_res;
-
-        const float pi = 4 * std::atan(1.0f);
-        for (int i = 0; i < pp_len; i++)
-        {
-            pp[i] = std::sin(pi * i / pp_len);
-        }
-
 
         // Q (half first)
         for (int j = 0; j < pp_len / 2; j++)
