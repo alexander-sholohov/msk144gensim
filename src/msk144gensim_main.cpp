@@ -39,20 +39,27 @@ extern "C" {
 
 }
 
+struct MsgItem
+{
+    char buf[80] = {"HELLO"};
+    int i4tone[144];
+    int bitseq[144];
+    char msgsent[200];
+};
+
+constexpr int NumMessagesMax = 3;
 
 struct Context
 {
     float center_freq = 1500.0f;
     int signal_level = 100;
     int noise_level = 5;
-    char message[3][80] = {"HELLO", "HELLO2", "HELLO3"};
     int on_frames = 10;
     int off_frames = 20;
     bool use_throttle = false;
     int sample_rate = 12000;
     int num_messages = 1;
-    int i4tone[3][144];
-    int bitseq[3][144];
+    MsgItem messages[NumMessagesMax];
 };
 
 
@@ -113,7 +120,7 @@ static void out_wav_16bit(const Context& ctx)
         {
             for(int i=0; i<ctx.on_frames; i++)
             {
-                const int* tones = ctx.i4tone[msg_idx];
+                const int* tones = ctx.messages[msg_idx].i4tone;
                 for(int j=0; j<144; j++)
                 {
                     const int ch = tones[j];
@@ -206,84 +213,106 @@ static void out_iq_8bit(const Context& ctx)
         throw std::runtime_error(info.str());
     }
 
-    const int N72 = 144 / 2;
+    
 
     std::vector<float> pp(pp_len);
-    std::vector<float> q_res(N72 * pp_len);
-    std::vector<float> i_res(N72 * pp_len);
-    std::vector<float> tones(144);
 
-    for(int i=0; i<144; i++)
+    constexpr int N72 = 144 / 2;
+
+    struct Item
     {
-        int v = ctx.i4tone[0][i];
-        v = v * 2 - 1;
-        tones[i] = static_cast<float>(v);
-    }
+        std::vector<float> tones {144};
+        std::vector<float> q_res {72};
+        std::vector<float> i_res {72};
+    };
 
-    const float pi = 4 * std::atan(1.0f);
-    for (int i = 0; i < pp_len; i++)
+    std::vector<Item> items;
+
+    for(int idx=0; idx<ctx.num_messages; idx++)
     {
-        pp[i] = std::sin(pi * i / pp_len);
-    }
-
-
-    // Q (half first)
-    for (int j = 0; j < pp_len / 2; j++)
-    {
-        q_res[j] = tones[0] * pp[pp_len / 2 + j];
-    }
-
-    // Q
-    for (int i = 1; i < N72 - 1; i++)
-    {
-        int base =  pp_len * i - pp_len / 2;
-        for (int j = 0; j < pp_len; j++)
+        Item item;
+        for(int i=0; i<144; i++)
         {
-            q_res[base + j] = tones[2 * i] * pp[j];
+            const int v = (ctx.messages[idx].bitseq[i] == 0)? -1 : 1;
+            item.tones[i] = static_cast<float>(v);
         }
+        items.push_back(item);
     }
 
-    // Q (half last)
+    for(int idx=0; idx<ctx.num_messages; idx++)
     {
-        int base = pp_len * N72 - pp_len / 2;
+        auto const& tones = items[idx].tones;
+        auto& q_res = items[idx].q_res;
+        auto& i_res = items[idx].i_res;
+
+        const float pi = 4 * std::atan(1.0f);
+        for (int i = 0; i < pp_len; i++)
+        {
+            pp[i] = std::sin(pi * i / pp_len);
+        }
+
+
+        // Q (half first)
         for (int j = 0; j < pp_len / 2; j++)
         {
-            q_res[base + j] = tones[0] * pp[j];
+            q_res[j] = tones[0] * pp[pp_len / 2 + j];
         }
-    }
 
-    // I
-    for (int i = 0; i < N72; i++)
-    {
-        int base = pp_len * i;
-        for (int j = 0; j < pp_len; j++)
+        // Q
+        for (int i = 1; i < N72 - 1; i++)
         {
-            i_res[base + j] = tones[2 * i + 1] * pp[j];
+            int base =  pp_len * i - pp_len / 2;
+            for (int j = 0; j < pp_len; j++)
+            {
+                q_res[base + j] = tones[2 * i] * pp[j];
+            }
+        }
+
+        // Q (half last)
+        {
+            int base = pp_len * N72 - pp_len / 2;
+            for (int j = 0; j < pp_len / 2; j++)
+            {
+                q_res[base + j] = tones[0] * pp[j];
+            }
+        }
+
+        // I
+        for (int i = 0; i < N72; i++)
+        {
+            int base = pp_len * i;
+            for (int j = 0; j < pp_len; j++)
+            {
+                i_res[base + j] = tones[2 * i + 1] * pp[j];
+            }
         }
     }
 
     while(true)
     {
-        for(int i=0; i<ctx.on_frames; i++)
+        for(int msg_idx=0; msg_idx<ctx.num_messages; msg_idx++)
         {
-            for (int i = 0; i < N72 * pp_len; i++)
+            for(int i=0; i<ctx.on_frames; i++)
             {
-                float i_noise = rng.get_random() * ctx.noise_level;
-                float q_noise = rng.get_random() * ctx.noise_level;
+                for (int i = 0; i < N72 * pp_len; i++)
+                {
+                    float i_noise = rng.get_random() * ctx.noise_level;
+                    float q_noise = rng.get_random() * ctx.noise_level;
 
-                float i_signal = i_res[i] * ctx.signal_level;
-                float q_signal = q_res[i] * ctx.signal_level;
+                    float i_signal = items[msg_idx].i_res[i] * ctx.signal_level;
+                    float q_signal = items[msg_idx].q_res[i] * ctx.signal_level;
 
-                char i_ch = static_cast<char>(i_noise + i_signal);
-                char q_ch = static_cast<char>(q_noise + q_signal);
+                    char i_ch = static_cast<char>(i_noise + i_signal);
+                    char q_ch = static_cast<char>(q_noise + q_signal);
 
-                std::cout << i_ch << q_ch;
-                //std::cout << q_ch << i_ch;
-            }
+                    std::cout << i_ch << q_ch;
+                    //std::cout << q_ch << i_ch;
+                }
 
-            if(ctx.use_throttle)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
+                if(ctx.use_throttle)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
+                }
             }
         }
 
@@ -393,6 +422,9 @@ int main(int argc, char** argv)
     Context ctx;
     bool show_only = false;
     int mode = 1; 
+    strcpy(ctx.messages[0].buf, "HELLO");
+    strcpy(ctx.messages[1].buf, "HELLO2");
+    strcpy(ctx.messages[2].buf, "HELLO3");
 
 
     while (true)
@@ -412,7 +444,7 @@ int main(int argc, char** argv)
                 usage();
                 break;
             case 1:
-                strcpy(ctx.message[0], optarg);
+                strcpy(ctx.messages[0].buf, optarg);
                 break;
             case 2:
                 ctx.center_freq = atof(optarg);
@@ -443,13 +475,14 @@ int main(int argc, char** argv)
                 break;
             case 11:
                 ctx.num_messages = atoi(optarg);
-                if(ctx.num_messages > 3) { ctx.num_messages = 3; }
+                if(ctx.num_messages > NumMessagesMax) { ctx.num_messages = NumMessagesMax; }
+                if(ctx.num_messages < 0) { ctx.num_messages = 0; }
                 break;
             case 12:
-                strcpy(ctx.message[1], optarg);
+                strcpy(ctx.messages[1].buf, optarg);
                 break;
             case 13:
-                strcpy(ctx.message[2], optarg);
+                strcpy(ctx.messages[2].buf, optarg);
                 break;
 
             default:
@@ -458,16 +491,12 @@ int main(int argc, char** argv)
         }
     }
 
-    char msgsent[200];
-    memset(msgsent, 0, sizeof(msgsent));
-
     for(int idx=0; idx<ctx.num_messages; idx++)
     {
         int ichk = 0;
         int itype = 1;
-        genmsk_128_90_(ctx.message[idx], &ichk, msgsent, ctx.i4tone[idx], &itype, 37, 37);
-
-        tone2bitseq(ctx.i4tone[idx], ctx.bitseq[idx]);
+        genmsk_128_90_(ctx.messages[idx].buf, &ichk, ctx.messages[idx].msgsent, ctx.messages[idx].i4tone, &itype, 37, 37);
+        tone2bitseq(ctx.messages[idx].i4tone, ctx.messages[idx].bitseq);
     }
 
     if(show_only)
@@ -475,31 +504,29 @@ int main(int argc, char** argv)
         for(int idx=0; idx<ctx.num_messages; idx++)
         {
             std::cout << "msg id = " << idx << std::endl;
-            std::cout << "msg sent: '" << msgsent << "'" << std::endl;
-            std::cout << "i4tone[40] = " << ctx.i4tone[idx][40] << std::endl;
-            std::cout << "i4tone:" << std::endl;
+            std::cout << "msg sent: '" << ctx.messages[idx].msgsent << "'" << std::endl;
+            std::cout << "i4tone[40] = " << ctx.messages[idx].i4tone[40] << std::endl;
+            std::cout << "i4tone: ";
             for(int i=0; i<144; i++)
             {
-                std::cout << ctx.i4tone[idx][i];
+                std::cout << ctx.messages[idx].i4tone[i];
             }
             std::cout << std::endl;
-            std::cout << "bitseq:" << std::endl;
+            std::cout << "bitseq: ";
             for(int i=0; i<144; i++)
             {
-                std::cout << ctx.bitseq[idx][i];
+                std::cout << ctx.messages[idx].bitseq[i];
             }
 
             std::cout << std::endl;
         }
 
-        //std::cout << "itype:" << itype << std::endl;
         std::cout << "signal_level:" << ctx.signal_level << std::endl;
         std::cout << "noise_level:" << ctx.noise_level << std::endl;
         std::cout << "mode:" << mode << std::endl;
         std::cout << "use_throttle:" << ctx.use_throttle << std::endl;
         std::cout << "sample_rate:" << ctx.sample_rate << std::endl;
         return 0;
-
     }
 
 
@@ -516,7 +543,6 @@ int main(int argc, char** argv)
         throw std::runtime_error("Wrong mode");
     }
 
- 
     std::cout << "Done." << std::endl;
 
     return 0;
