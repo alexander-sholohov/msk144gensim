@@ -111,9 +111,6 @@ add_executable (msk144gensim
   ${wsjt_msk144_FSRCS} 
   ${wsjt_CXXSRCS} 
   ${wsjt_msk144_CSRCS})
-target_link_libraries (msk144gensim  ${FFTW3_LIBRARIES}  ${CURL_LIBRARIES} )
 
+target_link_libraries(msk144gensim stdc++)
 
-source_group("wsjt_fortran" FILES ${wsjt_common_FSRCS} )
-source_group("wsjt_c" FILES ${ka9q_CSRCS} ${wsjt_CXXSRCS} ${wsjt_CSRCS} ${wsjt_jt65_CSRCS})
-source_group("src" FILES ${project_common_SRCS})
