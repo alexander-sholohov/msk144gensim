@@ -106,6 +106,8 @@ set (project_common_SRCS
 
 add_executable (msk144gensim
   src/msk144gensim_main.cpp 
+  src/msg_item.cpp
+  src/msg_item.h
   ${wsjt_common_FSRCS}
   ${project_common_SRCS}
   ${wsjt_msk144_FSRCS} 

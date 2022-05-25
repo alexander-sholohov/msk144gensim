@@ -9,12 +9,6 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#if __GNUC__ > 7
-#include <cstddef>
-  typedef size_t fortran_charlen_t;
-#else
-  typedef int fortran_charlen_t;
-#endif
 
 #include <string>
 #include <vector>
@@ -27,25 +21,7 @@
 #include <thread>
 #include <random>
 
-extern "C" {
-  // --- Fortran routines ---
-
-    void genmsk_128_90_(char msg0[], 
-                        int* ichk, 
-                        char msgsent[],
-                        int* i4tone,
-                        int* itype,
-                        fortran_charlen_t, fortran_charlen_t);
-
-}
-
-struct MsgItem
-{
-    char buf[80] = {"HELLO"};
-    int i4tone[144];
-    int bitseq[144];
-    char msgsent[200];
-};
+#include "msg_item.h"
 
 constexpr int NumMessagesMax = 3;
 
@@ -59,6 +35,7 @@ struct Context
     bool use_throttle = false;
     int sample_rate = 12000;
     int num_messages = 1;
+    bool numbered_messages = false;
     MsgItem messages[NumMessagesMax];
 };
 
@@ -99,6 +76,36 @@ static bool str2bool(const char* str)
     return false;
 }
 
+
+
+
+class NumberedMessage
+{
+public:
+    void makeNextMessage()
+    {
+        counter++;
+        if(counter > 99999)
+        {
+            counter = 0;
+        }
+
+        char buf[80];
+        sprintf(buf, "M_%05d", counter);
+        msg_item.initFromMessage(buf);
+    }
+
+    MsgItem& msgItem()
+    {
+        return msg_item;
+    }
+
+private:
+
+    int counter = 0;
+    MsgItem msg_item;
+};
+
 static void out_wav_16bit(const Context& ctx)
 {
     // gen wav
@@ -113,6 +120,7 @@ static void out_wav_16bit(const Context& ctx)
     const int64_t frame_length_in_milliseconds = 144LL * 1000 / static_cast<int64_t>(baud);
 
     SimpleRNG rng;
+    NumberedMessage numbered_msg;
 
     while(true)
     {
@@ -120,7 +128,17 @@ static void out_wav_16bit(const Context& ctx)
         {
             for(int i=0; i<ctx.on_frames; i++)
             {
-                const int* tones = ctx.messages[msg_idx].i4tone;
+                const int* tones;
+                if(ctx.numbered_messages)
+                {
+                    numbered_msg.makeNextMessage();
+                    tones = numbered_msg.msgItem().i4tone;
+                }
+                else
+                {
+                    tones = ctx.messages[msg_idx].i4tone;
+                }
+
                 for(int j=0; j<144; j++)
                 {
                     const int ch = tones[j];
@@ -188,7 +206,7 @@ static void out_wav_16bit(const Context& ctx)
 }
 
 
-static void out_iq_8bit(const Context& ctx)
+static void out_iq_8bit(Context& ctx)
 {
     const int symbols_per_second = 2000;
     const int sdr_sample_rate = ctx.sample_rate; // was 2048000
@@ -201,6 +219,7 @@ static void out_iq_8bit(const Context& ctx)
     // 144 iq len = 294912
 
     SimpleRNG rng;
+    NumberedMessage numbered_msg;
 
     if (pp_len < 12 || pp_len % 2 != 0)
     {
@@ -213,78 +232,13 @@ static void out_iq_8bit(const Context& ctx)
         throw std::runtime_error(info.str());
     }
 
-    std::vector<float> pp(pp_len);
-    const float pi = 4 * std::atan(1.0f);
-    for (int i = 0; i < pp_len; i++)
-    {
-        pp[i] = std::sin(pi * i / pp_len);
-    }
 
+    for(int idx=0; idx<ctx.num_messages; idx++)
+    {
+        ctx.messages[idx].calculateIQ(pp_len);
+    }
 
     constexpr int N72 = 144 / 2;
-
-    struct Item
-    {
-        Item(int pp_len): tones(144), q_res(72*pp_len), i_res(72*pp_len) {}
-
-        std::vector<float> tones;
-        std::vector<float> q_res;
-        std::vector<float> i_res;
-    };
-
-    std::vector<Item> items;
-
-    for(int idx=0; idx<ctx.num_messages; idx++)
-    {
-        Item item(pp_len);
-        for(int i=0; i<144; i++)
-        {
-            item.tones[i] = (ctx.messages[idx].bitseq[i] == 0)? -1.0f : 1.0f;
-        }
-        items.push_back(item);
-    }
-
-    for(int idx=0; idx<ctx.num_messages; idx++)
-    {
-        auto const& tones = items[idx].tones;
-        auto& q_res = items[idx].q_res;
-        auto& i_res = items[idx].i_res;
-
-        // Q (half first)
-        for (int j = 0; j < pp_len / 2; j++)
-        {
-            q_res[j] = tones[0] * pp[pp_len / 2 + j];
-        }
-
-        // Q
-        for (int i = 1; i < N72 - 1; i++)
-        {
-            int base =  pp_len * i - pp_len / 2;
-            for (int j = 0; j < pp_len; j++)
-            {
-                q_res[base + j] = tones[2 * i] * pp[j];
-            }
-        }
-
-        // Q (half last)
-        {
-            int base = pp_len * N72 - pp_len / 2;
-            for (int j = 0; j < pp_len / 2; j++)
-            {
-                q_res[base + j] = tones[0] * pp[j];
-            }
-        }
-
-        // I
-        for (int i = 0; i < N72; i++)
-        {
-            int base = pp_len * i;
-            for (int j = 0; j < pp_len; j++)
-            {
-                i_res[base + j] = tones[2 * i + 1] * pp[j];
-            }
-        }
-    }
 
     while(true)
     {
@@ -292,13 +246,29 @@ static void out_iq_8bit(const Context& ctx)
         {
             for(int i=0; i<ctx.on_frames; i++)
             {
+                float* i_res;
+                float* q_res;
+
+                if(ctx.numbered_messages)
+                {
+                    numbered_msg.makeNextMessage();
+
+                    i_res = &numbered_msg.msgItem().i_res[0];
+                    q_res = &numbered_msg.msgItem().q_res[0];
+                }
+                else
+                {
+                    i_res = &ctx.messages[msg_idx].i_res[0];
+                    q_res = &ctx.messages[msg_idx].q_res[0];
+                }
+
                 for (int i = 0; i < N72 * pp_len; i++)
                 {
                     float i_noise = rng.get_random() * ctx.noise_level;
                     float q_noise = rng.get_random() * ctx.noise_level;
 
-                    float i_signal = items[msg_idx].i_res[i] * ctx.signal_level;
-                    float q_signal = items[msg_idx].q_res[i] * ctx.signal_level;
+                    float i_signal = i_res[i] * ctx.signal_level;
+                    float q_signal = q_res[i] * ctx.signal_level;
 
                     char i_ch = static_cast<char>(i_noise + i_signal);
                     char q_ch = static_cast<char>(q_noise + q_signal);
@@ -339,36 +309,7 @@ static void out_iq_8bit(const Context& ctx)
 
 }
 
-static void tone2bitseq(const int* tone, int* outbitsec)
-{
-    int tmp[144];
 
-    // flip polarity
-    for(int i=0; i<144; i++)
-    {
-        tmp[i] = (tone[i] == 0)? 1: 0;
-    }
-
-    for(int i=0; i<144; i+=2)
-    {
-        tmp[i+0] = (tmp[i+0] == 0)? -1: 1;
-        tmp[i+1] = (tmp[i+1] == 0)? +1: -1;
-    }
-
-    int tmp2[144];
-
-    tmp2[0] = -1; // because of sync 01110010
-    for(int i=1; i<144; i++)
-    {
-        tmp2[i] = tmp[i-1] * tmp2[i-1];
-    }
-
-    for(int i=0; i<144; i++)
-    {
-        outbitsec[i] = (tmp2[i] == -1)? 0 : 1;
-    }
-
-}
 
 //-------------------------------------------------------------------
 static void usage(void)
@@ -414,6 +355,7 @@ int main(int argc, char** argv)
             {"num-messages", required_argument, 0, 0}, // 11
             {"message2", required_argument, 0, 0}, // 12
             {"message3", required_argument, 0, 0}, // 13
+            {"numbered-messages", required_argument, 0, 0}, // 14
             {0, 0, 0, 0}
     };
 
@@ -482,6 +424,9 @@ int main(int argc, char** argv)
             case 13:
                 strcpy(ctx.messages[2].buf, optarg);
                 break;
+            case 14:
+                ctx.numbered_messages = str2bool(optarg);
+                break;
 
             default:
                 usage();
@@ -491,10 +436,7 @@ int main(int argc, char** argv)
 
     for(int idx=0; idx<ctx.num_messages; idx++)
     {
-        int ichk = 0;
-        int itype = 1;
-        genmsk_128_90_(ctx.messages[idx].buf, &ichk, ctx.messages[idx].msgsent, ctx.messages[idx].i4tone, &itype, 37, 37);
-        tone2bitseq(ctx.messages[idx].i4tone, ctx.messages[idx].bitseq);
+        ctx.messages[idx].reinitForStoredMessage();
     }
 
     if(show_only)
