@@ -228,11 +228,6 @@ static void out_iq_8bit(Context& ctx)
     }
 
 
-    for(int idx=0; idx<ctx.num_messages; idx++)
-    {
-        ctx.messages[idx].calculateIQ(pp_len);
-    }
-
     constexpr int N72 = 144 / 2;
 
     while(true)
@@ -252,6 +247,7 @@ static void out_iq_8bit(Context& ctx)
             }
             else
             {
+                ctx.messages[msg_idx].calculateIQ(pp_len);
                 i_res = &ctx.messages[msg_idx].i_res[0];
                 q_res = &ctx.messages[msg_idx].q_res[0];
             }

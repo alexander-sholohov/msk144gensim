@@ -108,6 +108,8 @@ add_executable (msk144gensim
   src/msk144gensim_main.cpp 
   src/msg_item.cpp
   src/msg_item.h
+  src/f_interop.h
+  src/f_interop.cpp
   ${wsjt_common_FSRCS}
   ${project_common_SRCS}
   ${wsjt_msk144_FSRCS} 

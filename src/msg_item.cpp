@@ -1,32 +1,10 @@
 #include "msg_item.h"
-
-#if __GNUC__ > 7
-#include <cstddef>
-  typedef size_t fortran_charlen_t;
-#else
-  typedef int fortran_charlen_t;
-#endif
+#include "f_interop.h"
 
 #include <string.h>
-
-#include <unistd.h>
-#include <getopt.h>
-
 #include <cmath>
 #include <stdexcept>
 
-
-extern "C" {
-  // --- Fortran routines ---
-
-    void genmsk_128_90_(char msg0[], 
-                        int* ichk, 
-                        char msgsent[],
-                        int* i4tone,
-                        int* itype,
-                        fortran_charlen_t, fortran_charlen_t);
-
-}
 
 
 static void tone2bitseq(const int* tone, int* outbitsec)
@@ -71,7 +49,7 @@ void MsgItem::reinitForStoredMessage()
 {
     int ichk = 0;
     int itype = 1;
-    genmsk_128_90_(buf, &ichk, msgsent, i4tone, &itype, 37, 37);
+    fortran_genmsk_128_90(buf, &ichk, msgsent, i4tone, &itype);
 
     // check for some reason
     for(int j=0; j<144; j++)
