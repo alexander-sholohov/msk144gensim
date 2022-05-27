@@ -13,6 +13,8 @@
 #include <getopt.h>
 
 #include <cmath>
+#include <stdexcept>
+
 
 extern "C" {
   // --- Fortran routines ---
@@ -70,6 +72,17 @@ void MsgItem::reinitForStoredMessage()
     int ichk = 0;
     int itype = 1;
     genmsk_128_90_(buf, &ichk, msgsent, i4tone, &itype, 37, 37);
+
+    // check for some reason
+    for(int j=0; j<144; j++)
+    {
+        const int ch = i4tone[j];
+        if(ch!=0 && ch!=1)
+        {
+            throw std::runtime_error("wrong ch");
+        }
+    }
+
     tone2bitseq(i4tone, bitseq);
 }
 

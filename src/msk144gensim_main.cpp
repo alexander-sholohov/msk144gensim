@@ -84,15 +84,15 @@ class NumberedMessage
 public:
     void makeNextMessage()
     {
+        char buf[80];
+        sprintf(buf, "M_%05d", counter);
+        msg_item.initFromMessage(buf);
+
         counter++;
         if(counter > 99999)
         {
             counter = 0;
         }
-
-        char buf[80];
-        sprintf(buf, "M_%05d", counter);
-        msg_item.initFromMessage(buf);
     }
 
     MsgItem& msgItem()
@@ -126,19 +126,19 @@ static void out_wav_16bit(const Context& ctx)
     {
         for(int msg_idx=0; msg_idx<ctx.num_messages; msg_idx++)
         {
+            const int* tones;
+            if(ctx.numbered_messages)
+            {
+                numbered_msg.makeNextMessage();
+                tones = numbered_msg.msgItem().i4tone;
+            }
+            else
+            {
+                tones = ctx.messages[msg_idx].i4tone;
+            }
+
             for(int i=0; i<ctx.on_frames; i++)
             {
-                const int* tones;
-                if(ctx.numbered_messages)
-                {
-                    numbered_msg.makeNextMessage();
-                    tones = numbered_msg.msgItem().i4tone;
-                }
-                else
-                {
-                    tones = ctx.messages[msg_idx].i4tone;
-                }
-
                 for(int j=0; j<144; j++)
                 {
                     const int ch = tones[j];
@@ -157,11 +157,6 @@ static void out_wav_16bit(const Context& ctx)
                         char low = v & 0xff;
                         char high = v >> 8;
                         std::cout << low << high;
-                        // std::cout << "j:" << j 
-                        //     << " ch:" << ch 
-                        //     << " k:" << k 
-                        //     << " v:" << v 
-                        //     <<  std::endl;
 
                         phi += dphi;
                         if(phi > two_pi)
@@ -244,24 +239,25 @@ static void out_iq_8bit(Context& ctx)
     {
         for(int msg_idx=0; msg_idx<ctx.num_messages; msg_idx++)
         {
+            float* i_res;
+            float* q_res;
+
+            if(ctx.numbered_messages)
+            {
+                numbered_msg.makeNextMessage();
+                numbered_msg.msgItem().calculateIQ(pp_len);
+
+                i_res = &numbered_msg.msgItem().i_res[0];
+                q_res = &numbered_msg.msgItem().q_res[0];
+            }
+            else
+            {
+                i_res = &ctx.messages[msg_idx].i_res[0];
+                q_res = &ctx.messages[msg_idx].q_res[0];
+            }
+
             for(int i=0; i<ctx.on_frames; i++)
             {
-                float* i_res;
-                float* q_res;
-
-                if(ctx.numbered_messages)
-                {
-                    numbered_msg.makeNextMessage();
-
-                    i_res = &numbered_msg.msgItem().i_res[0];
-                    q_res = &numbered_msg.msgItem().q_res[0];
-                }
-                else
-                {
-                    i_res = &ctx.messages[msg_idx].i_res[0];
-                    q_res = &ctx.messages[msg_idx].q_res[0];
-                }
-
                 for (int i = 0; i < N72 * pp_len; i++)
                 {
                     float i_noise = rng.get_random() * ctx.noise_level;
@@ -274,7 +270,6 @@ static void out_iq_8bit(Context& ctx)
                     char q_ch = static_cast<char>(q_noise + q_signal);
 
                     std::cout << i_ch << q_ch;
-                    //std::cout << q_ch << i_ch;
                 }
 
                 if(ctx.use_throttle)
