@@ -430,6 +430,23 @@ int main(int argc, char** argv)
         ctx.messages[idx].reinitForStoredMessage();
     }
 
+    if(mode == 1)
+    {
+        if(ctx.signal_level + ctx.noise_level > 65535)
+        {
+            std::cerr << "(Signal+Noise) level > 65536. exit.";
+            return 1;
+        }
+    }
+    else if(mode == 2)
+    {
+        if(ctx.signal_level + ctx.noise_level > 127)
+        {
+            std::cerr << "(Signal+Noise) level > 127. exit.";
+            return 1;
+        }
+    }
+
     if(show_only)
     {
         for(int idx=0; idx<ctx.num_messages; idx++)
