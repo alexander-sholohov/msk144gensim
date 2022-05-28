@@ -30,8 +30,8 @@ struct Context
     float center_freq = 1500.0f;
     int signal_level = 100;
     int noise_level = 5;
-    int on_frames = 10;
-    int off_frames = 20;
+    int on_frames = 1;
+    int off_frames = 30;
     bool use_throttle = false;
     int sample_rate = 12000;
     int num_messages = 1;
@@ -266,6 +266,7 @@ static void out_iq_8bit(Context& ctx)
                     char q_ch = static_cast<char>(q_noise + q_signal);
 
                     std::cout << i_ch << q_ch;
+                    //std::cout << i << ": " << static_cast<int>(i_noise + i_signal) << " " << static_cast<int>(q_noise + q_signal) << std::endl;
                 }
 
                 if(ctx.use_throttle)
