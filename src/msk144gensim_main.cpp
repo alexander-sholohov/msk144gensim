@@ -273,8 +273,8 @@ static void out_iq_8bit(Context& ctx)
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(frame_length_in_milliseconds));
                 }
-            }
-        }
+            } // on_frames
+        } // num_messages
 
         // send silence
         for(int i=0; i<ctx.off_frames; i++)
@@ -296,7 +296,7 @@ static void out_iq_8bit(Context& ctx)
             }
         }
 
-    }
+    } // while true
 
 
 }
