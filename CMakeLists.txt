@@ -27,15 +27,7 @@ set (CMAKE_Fortran_FLAGS_RELEASE "${CMAKE_Fortran_FLAGS_RELEASE} -fbounds-check 
 set (CMAKE_Fortran_FLAGS_DEBUG   "${CMAKE_Fortran_FLAGS_DEBUG} -fbounds-check -fno-f2c ${General_FFLAGS}")
 
 
-set(WSJT_BASE_DIR ${CMAKE_SOURCE_DIR}/../wsjt-wsjtx  CACHE STRING "Provide path to WSJT sorurces")
-
-
-# set (ka9q_CSRCS
-#   ${WSJT_BASE_DIR}/lib/ftrsd/decode_rs.c
-#   ${WSJT_BASE_DIR}/lib/ftrsd/encode_rs.c
-#   ${WSJT_BASE_DIR}/lib/ftrsd/init_rs.c
-#   )
-# set_source_files_properties (${ka9q_CSRCS} PROPERTIES COMPILE_FLAGS -Wno-sign-compare)
+set(WSJT_BASE_DIR ${CMAKE_SOURCE_DIR}/deps/wsjtx  CACHE STRING "Provide path to WSJT sorurces")
 
 
 set (wsjt_msk144_CSRCS
@@ -54,9 +46,6 @@ set_source_files_properties (
 
 set (wsjt_common_FSRCS
   ${WSJT_BASE_DIR}/lib/packjt.f90
-  # ${WSJT_BASE_DIR}/lib/fftw3mod.f90
-  # ${WSJT_BASE_DIR}/lib/four2a.f90
-  # ${WSJT_BASE_DIR}/lib/timer_module.f90
   ${WSJT_BASE_DIR}/lib/deg2grid.f90
   ${WSJT_BASE_DIR}/lib/grid2deg.f90
   ${WSJT_BASE_DIR}/lib/fmtmsg.f90
@@ -68,36 +57,12 @@ set (wsjt_msk144_FSRCS
   ${WSJT_BASE_DIR}/lib/crc.f90
   ${WSJT_BASE_DIR}/lib/hashing.f90
   ${WSJT_BASE_DIR}/lib/77bit/packjt77.f90
-  # ${WSJT_BASE_DIR}/lib/analytic.f90
-  # ${WSJT_BASE_DIR}/lib/bpdecode40.f90
-  # ${WSJT_BASE_DIR}/lib/bpdecode128_90.f90
-  # ${WSJT_BASE_DIR}/lib/ft8/chkcrc13a.f90
   ${WSJT_BASE_DIR}/lib/chkcall.f90
-  # ${WSJT_BASE_DIR}/lib/determ.f90
   ${WSJT_BASE_DIR}/lib/encode_msk40.f90
   ${WSJT_BASE_DIR}/lib/encode_128_90.f90
-  # ${WSJT_BASE_DIR}/lib/genmsk_128_90.f90
   ${WSJT_BASE_DIR}/lib/genmsk40.f90
   ${WSJT_BASE_DIR}/lib/hash.f90
-  # ${WSJT_BASE_DIR}/lib/indexx.f90
-  # ${WSJT_BASE_DIR}/lib/msk40decodeframe.f90
-  # ${WSJT_BASE_DIR}/lib/msk144decodeframe.f90
-  # ${WSJT_BASE_DIR}/lib/msk40spd.f90
-  # ${WSJT_BASE_DIR}/lib/msk144spd.f90
-  # ${WSJT_BASE_DIR}/lib/msk40sync.f90
-  # ${WSJT_BASE_DIR}/lib/msk144sync.f90
-  # ${WSJT_BASE_DIR}/lib/msk40_freq_search.f90
-  # ${WSJT_BASE_DIR}/lib/msk144_freq_search.f90
-  # ${WSJT_BASE_DIR}/lib/mskrtd.f90
-  # ${WSJT_BASE_DIR}/lib/msk144signalquality.f90
-  # ${WSJT_BASE_DIR}/lib/platanh.f90
-  # ${WSJT_BASE_DIR}/lib/polyfit.f90
-  # ${WSJT_BASE_DIR}/lib/tweak1.f90
-  # ${WSJT_BASE_DIR}/lib/update_recent_calls.f90
-  # ${WSJT_BASE_DIR}/lib/update_msk40_hasharray.f90
   )
-
-
 
 
 
