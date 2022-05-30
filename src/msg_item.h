@@ -1,3 +1,9 @@
+//
+// Author: Alexander Sholokhov <ra9yer@yahoo.com>
+//
+// License: MIT
+//
+
 #pragma once
 
 #include <vector>
@@ -10,7 +16,6 @@ struct MsgItem
     char msgsent[200];
     std::vector<float> q_res;
     std::vector<float> i_res;
-
 
     void initFromMessage(const char* msg);
     void reinitForStoredMessage();
