@@ -248,12 +248,11 @@ static void out_iq_8bit(Context& ctx)
                     float i_signal = i_res[i] * ctx.signal_level;
                     float q_signal = q_res[i] * ctx.signal_level;
 
-                    char i_ch = static_cast<char>(i_noise + i_signal);
-                    char q_ch = static_cast<char>(q_noise + q_signal);
+                    int i_ch = static_cast<int>(i_noise + i_signal);
+                    int q_ch = static_cast<int>(q_noise + q_signal);
 
-                    std::cout << i_ch << q_ch;
-                    // std::cout << i << ": " << static_cast<int>(i_noise + i_signal) << "
-                    // " << static_cast<int>(q_noise + q_signal) << std::endl;
+                    std::cout << static_cast<char>(i_ch) << static_cast<char>(q_ch);
+                    // std::cout << i << ": " << i_ch << " " << q_ch << std::endl;
                 }
 
                 if(ctx.use_throttle)
@@ -271,10 +270,10 @@ static void out_iq_8bit(Context& ctx)
                 float i_noise = rng.get_random() * ctx.noise_level;
                 float q_noise = rng.get_random() * ctx.noise_level;
 
-                char i_ch = static_cast<char>(i_noise);
-                char q_ch = static_cast<char>(q_noise);
+                int i_ch = static_cast<int>(i_noise);
+                int q_ch = static_cast<int>(q_noise);
 
-                std::cout << i_ch << q_ch;
+                std::cout << static_cast<char>(i_ch) << static_cast<char>(q_ch);
             }
 
             if(ctx.use_throttle)
