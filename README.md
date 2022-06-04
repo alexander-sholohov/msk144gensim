@@ -33,6 +33,11 @@ cmake ..
 cmake --build . 
 ```
 
+**Example. How to feed data into HackRF One:**
+```shell
+./msk144gensim --mode=2 --sample-rate=8000000 --on-frames=5 --off-frames=5 --signal-level=20 --noise-level=40 | hackrf_transfer -t - -f 144361500 -s 8000000
+```
+
 ---
 
 *Acknowledgements to K1JT Joe Taylor and WSJT Development Group. The algorithms, source code, and protocol specifications for the mode MSK144, JT65, Q65 are Copyright © 2001-2021 by one or more of the following authors: Joseph Taylor, K1JT; Bill Somerville, G4WJS; Steven Franke, K9AN; Nico Palermo, IV3NWV; Greg Beam, KI7MT; Michael Black, W9MDB; Edson Pereira, PY2SDR; Philip Karn, KA9Q; and other members of the WSJT Development Group.*
