@@ -13,6 +13,7 @@ if (NOT CMAKE_BUILD_TYPE)
     FORCE)
 endif (NOT CMAKE_BUILD_TYPE)
 
+include (GNUInstallDirs)
 
 # project definitions
 add_definitions (-DBIGSYM=1 )
@@ -83,3 +84,4 @@ add_executable (msk144gensim
 
 target_link_libraries(msk144gensim stdc++)
 
+install (TARGETS msk144gensim DESTINATION ${CMAKE_INSTALL_BINDIR})
