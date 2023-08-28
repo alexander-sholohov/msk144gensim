@@ -4,7 +4,7 @@ Testing utility. It produces MSK144 frames with desired signal and noise levels.
 Two output formats: 
 1 Audio – 16bit, mono, 12000 samples per second.
 2 IQ – 8+8bit, 12000 samples per second.
-The number of samples per second is tweakable. IQ stream can be sent to decoder or hardware signal producer like HackRf device.
+The number of samples per second is tweakable. IQ stream can be sent to decoder or hardware signal producer like HackRF One device.
 
 **How to compile:**
 
@@ -13,6 +13,7 @@ Prereqirements:
 ```shell
 sudo apt-get install build-essential
 sudo apt-get install cmake
+sudo apt-get install libboost-dev
 sudo apt-get install gfortran
 
 ```
@@ -33,9 +34,25 @@ cmake ..
 cmake --build . 
 ```
 
-**Example. How to feed data into HackRF One:**
+Install system-wide if necessary:
+```shell
+sudo cmake --install .
+```
+
+Get brief help:
+```shell
+./msk144gensim --help
+```
+
+**Examples:**
+How to feed data to HackRF One.
 ```shell
 ./msk144gensim --mode=2 --sample-rate=8000000 --on-frames=5 --off-frames=5 --signal-level=20 --noise-level=40 | hackrf_transfer -t - -f 144361500 -s 8000000
+```
+
+Feed audio stream directly to msk144 decoder.
+```shell
+./msk144gensim  | msk144decoder
 ```
 
 ---
