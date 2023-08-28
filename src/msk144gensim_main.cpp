@@ -61,6 +61,55 @@ private:
     std::uniform_int_distribution<std::mt19937::result_type> _dist;
 };
 
+class StdoutWriter
+{
+public:
+    StdoutWriter(size_t buffer_size)
+        : _buffer_size(buffer_size)
+    {
+    }
+
+    void put_s8(char ch)
+    {
+        _buf.push_back(ch);
+
+        flush_if_necessary();
+    }
+
+    void put_s16(int v)
+    {
+        char low = v & 0xff;
+        char high = (v >> 8) & 0xff;
+        _buf.push_back(low);
+        _buf.push_back(high);
+
+        flush_if_necessary();
+    }
+
+    void flush_if_necessary()
+    {
+        if (_buf.size() > _buffer_size) 
+        {
+            throw std::runtime_error("StdoutWriter buffer overflow");
+        }
+
+        if (_buf.size() == _buffer_size)
+        {
+            size_t written = write(fileno(stdout), (const char*)&_buf[0], _buffer_size);
+            if (written != _buffer_size) 
+            {
+                std::cerr << "e";
+            }
+            _buf.clear();
+        }
+    }
+
+private:
+    size_t _buffer_size;
+    std::vector<char> _buf;
+};
+
+
 //------------------------------------------------------------
 static bool str2bool(const char* str)
 {
@@ -111,6 +160,7 @@ static void out_wav_16bit(const Context& ctx)
 
     SimpleRNG rng;
     NumberedMessage numbered_msg;
+    StdoutWriter writer(4096);
 
     while(true)
     {
@@ -144,9 +194,7 @@ static void out_wav_16bit(const Context& ctx)
                         float v_signal = std::cos(phi) * ctx.signal_level;
                         float v_noise = rng.get_random() * ctx.noise_level;
                         int v = static_cast<int>(v_signal + v_noise);
-                        char low = v & 0xff;
-                        char high = v >> 8;
-                        std::cout << low << high;
+                        writer.put_s16(v);
 
                         phi += dphi;
                         if(phi > two_pi)
@@ -173,10 +221,7 @@ static void out_wav_16bit(const Context& ctx)
                     float v_signal = 0.0f;
                     float v_noise = rng.get_random() * ctx.noise_level;
                     int v = static_cast<int>(v_signal + v_noise);
-
-                    char low = v & 0xff;
-                    char high = v >> 8;
-                    std::cout << low << high;
+                    writer.put_s16(v);
                 }
             }
 
@@ -202,6 +247,7 @@ static void out_iq_8bit(Context& ctx)
 
     SimpleRNG rng;
     NumberedMessage numbered_msg;
+    StdoutWriter writer(4096);
 
     if(pp_len < 12 || pp_len % 2 != 0)
     {
@@ -251,8 +297,8 @@ static void out_iq_8bit(Context& ctx)
                     int i_ch = static_cast<int>(i_noise + i_signal);
                     int q_ch = static_cast<int>(q_noise + q_signal);
 
-                    std::cout << static_cast<char>(i_ch) << static_cast<char>(q_ch);
-                    // std::cout << i << ": " << i_ch << " " << q_ch << std::endl;
+                    writer.put_s8(i_ch);
+                    writer.put_s8(q_ch);
                 }
 
                 if(ctx.use_throttle)
@@ -273,7 +319,8 @@ static void out_iq_8bit(Context& ctx)
                 int i_ch = static_cast<int>(i_noise);
                 int q_ch = static_cast<int>(q_noise);
 
-                std::cout << static_cast<char>(i_ch) << static_cast<char>(q_ch);
+                writer.put_s8(i_ch);
+                writer.put_s8(q_ch);
             }
 
             if(ctx.use_throttle)
